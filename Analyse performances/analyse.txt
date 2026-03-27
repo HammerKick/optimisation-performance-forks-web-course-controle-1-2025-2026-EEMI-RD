@@ -1,0 +1,55 @@
+L'optimisation d'un site web est importante pour une raison simple : l'utilisateur lambda n'a pas un temps d'attention et une patience élevée.
+Au-delà d'environ 4 secondes d'attente sur une page qui ne charge pas en entier, l'utilisateur reviendra quasi systématiquement en arrière, ce qu'on appelle un rebond.
+Si tous les éléments ne chargent pas quasi instantanément, le taux de rebond sera élevé ce qui sera repéré par Google, le site ne sera donc plus aussi bien référencé.
+De plus, un site en général souhaite pousser l'utilisateur à l'action : c'est impossible si le site n'est pas optimisé et ne permet pas de naviguer dessus confortablement.
+Il est donc plus que nécessaire d'optimiser son site : s'il est beau et fonctionnel, c'est bien, mais c'est encore plus important qu'il soit optimisé pour que l'utilisateur puisse y trouver son compte le plus rapidement possible.
+
+Ici nous analysons et cherchons à améliorer l'application web de Galaxie Boissières.
+Le constat est sans appel dès le premier chargement : il faut 9 secondes pour entièrement charger les images du site.
+Chacune des images est récupérée via une requête GET qui prend une seconde : la durée n'est pas recommandée, c'est 500 ms max normalement.
+Ceci est lié à deux choses : leur taille et leur format. La majorité des images dépassent 1 Mo ce qui est très long à charger. Elles sont aussi affichées à résolution maximale ce qui n'est clairement pas nécessaire.
+Ces images sont stockées dans un dossier assets/img et sont toutes majoritairement des jpg, avec certains en webp. Il est possible de réduire la qualité du jpg de 70% sans qu'on en voit la différence.
+Le chargement de ces images ne se fait pas en cascade, c'est complètement chaotique, l'affichage est confus pour l'utilisateur : s'il scrolle vite, il va voir un mix d'images chargées et non chargées
+La bonne nouvelle cependant, c'est que les images sont gardées en cache après le premier chargement ce qui l'accélère fortement. Mais bon, c'est le premier chargement qui compte, pas les suivants : un utilisateur ne reviendra pas une deuxième fois si c'est aussi lent.
+
+Ces images devraient en réalité être chargées bien avant que l'utilisateur arrive : l'application manque cruellement d'un prefetch ou d'un prerender qui permettrait d'avoir les images chargées avant même que l'utilisateur ne se rende compte qu'il en manque.
+
+L'utilisation de Profiler Firefox permet d'analyser le temps de chargement :
+- 10 secondes pour le chargement total
+- Le LCP est à 2 secondes : c'est énorme
+- Le First Input Delay est à 700 ms, un délai qui se ressent en tant qu'utilisateur
+
+Donc il faut absolument compresser les images et les afficher en cascade. Un lazy loading serait fortement bénéfique à cette application.
+
+Lighthouse sur Chrome nous donne aussi des résultats similaires.
+
+Il est possible aussi d'optimiser le SEO, en ajoutant notamment un alt sur l'image affichant le nom de la guitare.
+
+A ce sujet d'ailleurs, un test Lighthouse nous montre ces résultats avant les modifications :
+- 59 de performance
+- 85 d'accessibilité
+- 96 de bonnes pratiques
+- 36 de SEO : c'est le point le plus fâcheux
+
+C'est clairement l'absence d'alts qui pêche ici en plus de l'absence d'une meta description pour Google.
+
+En backend, la base de données pourrait être mieux optimisé. A aucun moment la base a besoin d'autant de lignes. On affiche grand maximum une cinquantaine d'images et surtout, on utilise les données textuelles que pour une vingtaine.
+La base a quatre tables : directus_files, modeles, galaxy et messenger_messages.
+L'app n'utilise en réalité que les trois premières colonnes de directus_files. Inutile donc de récupérer l'entièreté de chacune des lignes de cette table.
+D'ailleurs en réalité, on pourrait aussi couper de nombreux champs des 2 autres tables (Model et Galaxy) :
+- Galaxy n'a besoin que du modèle, du titre et de la description
+- Le modèle... on n'utilise que l'id ! Donc autant juste récupérer l'id, ça suffit amplement.
+
+Le plan d'action :
+- priorité absolue : compresser toutes les images de manière à ce qu'elles soient beaucoup moins lourdes et beaucoup plus rapides à charger
+    - résultat : -400 Mo environ sur toutes les images, temps de chargement réduit de plus de la moitié
+- ajouter un préfetch des images pour commencer le chargement à l'instant où l'utilisateur clique sur la page, avant même qu'elle ne s'affiche et faire en sorte que les images se chargent bien de haut en bas
+    - résultat : ajout d'un lazy loading et fetch priority high, augmentation du score de performance et d'accessibilité (66 performance, 91 accessibilité et même 100 de bonnes pratiques)
+- mettre du alt sur les images
+    - résultat : augmentation du SEO à 45
+- ajout d'une meta description : SEO monte à 54
+- optimiser les requêtes SQL :
+    - suppression des récupérations de champs inutilse dans DirectusFiles.php, Galaxy.php et Modele.php : accélération des requêtes et amélioration de leur lisibilité
+
+A l'avenir, il faudrait réduire la taille des images en elles-même et les crop, notamment celles qu'on va afficher en petit.
+Difficile de toutes les crops une par une vu qu'on ne peut pas toutes les crops en 3h30 et que les noms des fichiers sont pas assez explicites pour faire un tri rapide.
